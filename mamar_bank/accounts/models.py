@@ -23,3 +23,7 @@ class UserAddress(models.Model):
     country = models.CharField(max_length=100)
     def __str__(self):
         return str(self.user.email)
+
+class Bank(models.Model):
+    name = models.CharField(max_length=200, null=True, blank=True)
+    is_bankrupt = models.BooleanField(default=False)

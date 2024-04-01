@@ -1,5 +1,6 @@
 from django import forms
 from .models import Transaction
+from accounts.models import UserBankAccount, Bank
 
 class TransactionForm(forms.ModelForm):
     class Meta:
@@ -27,6 +28,7 @@ class DepositForm(TransactionForm):
                 f'You need to deposit at least {min_deposit_amount} $'
             )
 
+
         return amount
 
 class WithdrawForm(TransactionForm):
@@ -37,6 +39,13 @@ class WithdrawForm(TransactionForm):
         max_withdraw_amount = 20000
         balance = account.balance # 1000
         amount = self.cleaned_data.get('amount')
+        bank = Bank.objects.get(name = "mamar")
+        
+        if bank.is_bankrupt:
+            raise forms.ValidationError(
+            f'Bank has gone bankrupt. Withdrawals are not allowed.'
+            )
+            
         if amount < min_withdraw_amount:
             raise forms.ValidationError(
                 f'You can withdraw at least {min_withdraw_amount} $'
@@ -53,6 +62,44 @@ class WithdrawForm(TransactionForm):
                 'You can not withdraw more than your account balance'
             )
 
+        return amount
+
+
+
+class TransferMoneyForm(TransactionForm):
+    recipient_account = forms.CharField(label='Recipient Account Number')
+
+    def clean_recipient_account(self):
+        recipient_account_number = self.cleaned_data.get('recipient_account')
+
+        try:
+            recipient_account = UserBankAccount.objects.get(account_no=recipient_account_number)
+        except UserBankAccount.DoesNotExist:
+            raise forms.ValidationError("Recipient account does not exist.")
+        return recipient_account_number
+
+    def clean_amount(self):
+        account = self.account
+        min_transfer_amount = 50
+        max_transfer_amount = 200000
+        balance = account.balance
+        amount = self.cleaned_data.get('amount')
+        if amount < min_transfer_amount:
+            raise forms.ValidationError(
+                f'You can transfer at least {min_transfer_amount} $'
+            )
+
+        if amount > max_transfer_amount:
+            raise forms.ValidationError(
+                f'You can transfer at most {max_transfer_amount} $'
+            )
+
+        if amount > balance:
+            raise forms.ValidationError(
+                f'You have {balance} $ in your account. '
+                'You can not transfer more than your account balance'
+            )
+            
         return amount
 
 class LoanRequestForm(TransactionForm):

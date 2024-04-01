@@ -1,4 +1,5 @@
 from django.contrib import messages
+from accounts.models import UserBankAccount
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -6,13 +7,14 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views import View
 from django.http import HttpResponse
 from django.views.generic import CreateView, ListView
-from transactions.constants import DEPOSIT, WITHDRAWAL,LOAN, LOAN_PAID
+from transactions.constants import DEPOSIT, WITHDRAWAL,LOAN, LOAN_PAID, TRANSFER
 from datetime import datetime
 from django.db.models import Sum
 from transactions.forms import (
     DepositForm,
     WithdrawForm,
     LoanRequestForm,
+    TransferMoneyForm,
 )
 from transactions.models import Transaction
 
@@ -49,10 +51,7 @@ class DepositMoneyView(TransactionCreateMixin):
     def form_valid(self, form):
         amount = form.cleaned_data.get('amount')
         account = self.request.user.account
-        # if not account.initial_deposit_date:
-        #     now = timezone.now()
-        #     account.initial_deposit_date = now
-        account.balance += amount # amount = 200, tar ager balance = 0 taka new balance = 0+200 = 200
+        account.balance += amount
         account.save(
             update_fields=[
                 'balance'
@@ -79,13 +78,38 @@ class WithdrawMoneyView(TransactionCreateMixin):
         amount = form.cleaned_data.get('amount')
 
         self.request.user.account.balance -= form.cleaned_data.get('amount')
-        # balance = 300
-        # amount = 5000
+
         self.request.user.account.save(update_fields=['balance'])
 
         messages.success(
             self.request,
             f'Successfully withdrawn {"{:,.2f}".format(float(amount))}$ from your account'
+        )
+
+        return super().form_valid(form)
+    
+class TransferMoneyView(TransactionCreateMixin):
+    form_class = TransferMoneyForm
+    title = 'Transfer Money'
+
+    def get_initial(self):
+        initial = {'transaction_type': TRANSFER}
+        return initial
+
+    def form_valid(self, form):
+        amount = form.cleaned_data.get('amount')
+        recipient_account_number = form.cleaned_data.get('recipient_account')
+
+        self.request.user.account.balance -= form.cleaned_data.get('amount')
+        self.request.user.account.save(update_fields=['balance'])
+        
+        recipient_account =UserBankAccount.objects.get(account_no=recipient_account_number)
+        recipient_account.balance += form.cleaned_data.get('amount')
+        recipient_account.save(update_fields=['balance'])
+
+        messages.success(
+            self.request,
+            f'Successfully transfer {"{:,.2f}".format(float(amount))}$ to account number {recipient_account_number} from your account'
         )
 
         return super().form_valid(form)
